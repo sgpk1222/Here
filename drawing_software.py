@@ -11,6 +11,7 @@ from tkinter import ttk, messagebox, filedialog, colorchooser
 import math
 import json
 import copy
+import colorsys
 
 
 # ============================================
@@ -45,6 +46,14 @@ class Shape:
         return (x1 - tolerance <= x <= x2 + tolerance and 
                 y1 - tolerance <= y <= y2 + tolerance)
     
+    def get_center(self):
+        """获取图形中心点"""
+        bounds = self.get_bounds()
+        if bounds is None:
+            return (0, 0)
+        x1, y1, x2, y2 = bounds
+        return ((x1 + x2) / 2, (y1 + y2) / 2)
+    
     def to_dict(self):
         """将图形转换为字典（用于序列化）"""
         return {
@@ -52,7 +61,8 @@ class Shape:
             'points': self.points,
             'color': self.color,
             'width': self.width,
-            'fill_color': self.fill_color
+            'fill_color': self.fill_color,
+            'selected': self.selected
         }
     
     @staticmethod
@@ -65,6 +75,7 @@ class Shape:
             data.get('width', 2)
         )
         shape.fill_color = data.get('fill_color')
+        shape.selected = data.get('selected', False)
         return shape
 
 
@@ -177,12 +188,17 @@ class FileManager:
     @staticmethod
     def save_to_file(shapes, filepath):
         """保存图形到文件"""
-        data = {
-            'version': '1.0',
-            'shapes': [shape.to_dict() for shape in shapes]
-        }
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        try:
+            data = {
+                'version': '1.0',
+                'shapes': [shape.to_dict() for shape in shapes]
+            }
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            print(f"保存文件失败: {str(e)}")
+            return False
     
     @staticmethod
     def load_from_file(filepath):
@@ -216,7 +232,8 @@ class DrawingApp:
         self.selected_shape = None           # 当前选中的图形
         self.drawing = False                 # 是否正在绘制
         self.start_point = None              # 绘制起始点
-        self.temp_shape = None               # 临时图形
+        self.temp_shape = None               # 临时图形(离散工具)
+        self.temp_shapes = []               # 临时图形列表(连续工具)
         self.moving = False                  # 是否正在移动图形
         self.move_start = None               # 移动起始点
         
@@ -539,26 +556,24 @@ class DrawingApp:
         if self.drawing:
             x, y = event.x, event.y
             
-            # 清除临时图形
-            if self.temp_shape:
-                self.canvas.delete(self.temp_shape)
+            # 离散绘制工具：清除旧预览
+            if self.current_tool in ('line', 'rectangle', 'circle'):
+                if self.temp_shape:
+                    self.canvas.delete(self.temp_shape)
             
             if self.current_tool == 'line':
-                # 绘制直线预览
                 self.temp_shape = self.canvas.create_line(
                     self.start_point[0], self.start_point[1], x, y,
                     fill=self.current_color,
                     width=self.current_width
                 )
             elif self.current_tool == 'rectangle':
-                # 绘制矩形预览
                 self.temp_shape = self.canvas.create_rectangle(
                     self.start_point[0], self.start_point[1], x, y,
                     outline=self.current_color,
                     width=self.current_width
                 )
             elif self.current_tool == 'circle':
-                # 绘制圆形预览
                 cx = (self.start_point[0] + x) / 2
                 cy = (self.start_point[1] + y) / 2
                 rx = abs(x - self.start_point[0]) / 2
@@ -569,30 +584,28 @@ class DrawingApp:
                     width=self.current_width
                 )
             elif self.current_tool == 'pencil':
-                # 自由绘制
                 self.temp_points.append((x, y))
                 if len(self.temp_points) > 1:
-                    self.temp_shape = self.canvas.create_line(
+                    seg_id = self.canvas.create_line(
                         *self.temp_points[-2], *self.temp_points[-1],
                         fill=self.current_color,
                         width=self.current_width
                     )
+                    self.temp_shapes.append(seg_id)
             elif self.current_tool == 'rainbow':
-                # 彩虹画笔
                 self.temp_points.append((x, y))
                 if len(self.temp_points) > 1:
-                    import colorsys
                     hue = (len(self.temp_points) * 0.01) % 1.0
                     rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
                     color = '#%02x%02x%02x' % (int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
-                    self.temp_shape = self.canvas.create_line(
+                    seg_id = self.canvas.create_line(
                         *self.temp_points[-2], *self.temp_points[-1],
                         fill=color,
                         width=self.current_width
                     )
+                    self.temp_shapes.append(seg_id)
             elif self.current_tool == 'eraser':
-                # 橡皮擦
-                self.temp_shape = self.canvas.create_rectangle(
+                eraser_id = self.canvas.create_rectangle(
                     x - self.current_width * 2,
                     y - self.current_width * 2,
                     x + self.current_width * 2,
@@ -600,9 +613,9 @@ class DrawingApp:
                     fill='white',
                     outline='white'
                 )
+                self.temp_shapes.append(eraser_id)
         
         elif self.moving and self.selected_shape:
-            # 移动图形
             dx = event.x - self.move_start[0]
             dy = event.y - self.move_start[1]
             TransformManager.move(self.selected_shape, dx, dy)
@@ -618,6 +631,9 @@ class DrawingApp:
             if self.temp_shape:
                 self.canvas.delete(self.temp_shape)
                 self.temp_shape = None
+            for tid in self.temp_shapes:
+                self.canvas.delete(tid)
+            self.temp_shapes.clear()
             
             if self.current_tool == 'line':
                 # 创建直线图形
@@ -1011,11 +1027,6 @@ class DrawingApp:
             
             elif pattern_type == "flower_pattern":
                 # 花瓣图案
-                for i in range(361):
-                    angle = math.radians(i)
-                    r = 100 * abs(math.sin(3 * angle))
-                    x = center_x + r * math.cos(angle)
-                    y = center_y + r * math.sin(angle)
                 points = []
                 for i in range(361):
                     angle = math.radians(i)
@@ -1059,9 +1070,11 @@ class DrawingApp:
         )
         
         if filepath:
-            FileManager.save_to_file(self.shapes, filepath)
-            self.status_label.config(text=f"文件已保存: {filepath}")
-            messagebox.showinfo("成功", "文件保存成功！")
+            if FileManager.save_to_file(self.shapes, filepath):
+                self.status_label.config(text=f"文件已保存: {filepath}")
+                messagebox.showinfo("成功", "文件保存成功！")
+            else:
+                messagebox.showerror("错误", "保存失败，请检查文件路径")
     
     def _open_file(self):
         """打开文件"""
@@ -1115,7 +1128,7 @@ class DrawingApp:
                 fill=shape.fill_color if shape.fill_color else '',
                 width=shape.width
             )
-        elif shape.shape_type == 'circle':
+        elif shape.shape_type == 'circle' or shape.shape_type == 'ellipse':
             item = self.canvas.create_polygon(
                 coords,
                 outline=shape.color,
@@ -1132,7 +1145,6 @@ class DrawingApp:
         elif shape.shape_type == 'rainbow':
             # 彩虹画笔特殊处理
             for i in range(len(shape.points) - 1):
-                import colorsys
                 hue = (i * 0.01) % 1.0
                 rgb = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
                 color = '#%02x%02x%02x' % (int(rgb[0]*255), int(rgb[1]*255), int(rgb[2]*255))
@@ -1153,7 +1165,7 @@ class DrawingApp:
             )
         
         # 如果图形被选中，绘制选择框
-        if shape.selected and item:
+        if shape.selected:
             bounds = shape.get_bounds()
             if bounds:
                 padding = 5

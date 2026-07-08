@@ -7,9 +7,13 @@
 
 # 导出所有模块的主要类
 from shapes import Shape, ShapeFactory, ShapeManager
-from transforms import TransformManager, TransformHelper
+from transforms import TransformManager, TransformHelper, TransformDialogHelper
 from curves import CurveGenerator, CurvePresets
-from file_manager import FileManager, BackupManager, ExportManager
+from file_manager import FileManager, BackupManager, ExportManager, FilePathHelper
+from ui_components import (
+    ToolbarPanel, ColorPanel, WidthPanel,
+    StatusBar, MenuBar, ToolTip, DialogHelper, RainbowBrush
+)
 
 # 版本信息
 __version__ = "1.0"

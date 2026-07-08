@@ -90,7 +90,7 @@ class Shape:
         返回:
             dict: 包含图形所有属性的字典
         """
-        return {
+        data = {
             'shape_type': self.shape_type,
             'points': self.points,
             'color': self.color,
@@ -98,6 +98,12 @@ class Shape:
             'fill_color': self.fill_color,
             'selected': self.selected
         }
+        for attr in ['text_content', 'text_font_size', 'function_expr',
+                      'image_path', 'image_key', 'image_size',
+                      'rainbow_colors', 'spray_dots']:
+            if hasattr(self, attr):
+                data[attr] = getattr(self, attr)
+        return data
     
     @staticmethod
     def from_dict(data):
@@ -121,6 +127,13 @@ class Shape:
         )
         shape.fill_color = data.get('fill_color')
         shape.selected = data.get('selected', False)
+        
+        # 恢复扩展属性
+        for attr in ['text_content', 'text_font_size', 'function_expr',
+                      'image_path', 'image_key', 'image_size',
+                      'rainbow_colors', 'spray_dots']:
+            if attr in data:
+                setattr(shape, attr, data[attr])
         
         return shape
     

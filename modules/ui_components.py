@@ -50,13 +50,15 @@ class ToolbarPanel:
         
         # 工具定义列表
         tools = [
-            ('选择', 'select', '选择和移动图形'),
-            ('直线', 'line', '绘制直线'),
-            ('矩形', 'rectangle', '绘制矩形'),
-            ('圆形', 'circle', '绘制圆形/椭圆'),
-            ('画笔', 'pencil', '自由绘制曲线'),
-            ('彩虹', 'rainbow', '彩虹渐变画笔'),
-            ('橡皮', 'eraser', '擦除内容')
+            ('🎯 选择', 'select', '选择和移动图形'),
+            ('📏 直线', 'line', '绘制直线'),
+            ('⬜ 矩形', 'rectangle', '绘制矩形'),
+            ('⭕ 圆形', 'circle', '绘制圆形/椭圆'),
+            ('✏ 画笔', 'pencil', '自由绘制曲线'),
+            ('🎨 喷枪', 'spray', '模拟喷漆效果'),
+            ('🌈 彩虹', 'rainbow', '彩虹渐变画笔'),
+            ('🔤 文字', 'text', '在画布上添加文字'),
+            ('🧹 橡皮', 'eraser', '擦除内容')
         ]
         
         # 创建按钮
@@ -64,12 +66,15 @@ class ToolbarPanel:
             btn = tk.Button(
                 self.parent,
                 text=text,
-                width=8,
+                width=10,
                 height=1,
-                relief='raised',
+                relief='flat',
+                bg='#e8e8e8',
+                activebackground='#c0d8f0',
+                cursor='hand2',
                 command=lambda t=tool_id: self._on_button_click(t)
             )
-            btn.pack(pady=2, padx=5)
+            btn.pack(pady=1, padx=5)
             
             # 创建工具提示
             ToolTip(btn, tooltip)
@@ -88,12 +93,11 @@ class ToolbarPanel:
     
     def set_active_tool(self, tool_id):
         """设置当前激活的工具"""
-        # 更新所有按钮状态
         for tid, btn in self.tool_buttons.items():
             if tid == tool_id:
-                btn.config(relief='sunken', bg='lightblue')
+                btn.config(relief='sunken', bg='#c0d8f0')
             else:
-                btn.config(relief='raised', bg='SystemButtonFace')
+                btn.config(relief='flat', bg='#e8e8e8')
 
 
 # ============================================
@@ -474,6 +478,18 @@ class MenuBar:
         file_menu.add_separator()
         
         file_menu.add_command(
+            label="导出为文本",
+            command=self._get_callback('export_text')
+        )
+        
+        file_menu.add_command(
+            label="导出统计摘要",
+            command=self._get_callback('export_summary')
+        )
+        
+        file_menu.add_separator()
+        
+        file_menu.add_command(
             label="退出程序",
             command=self.parent.quit
         )
@@ -482,6 +498,20 @@ class MenuBar:
         """创建编辑菜单"""
         edit_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="编辑", menu=edit_menu)
+        
+        edit_menu.add_command(
+            label="撤销",
+            command=self._get_callback('undo'),
+            accelerator="Ctrl+Z"
+        )
+        
+        edit_menu.add_command(
+            label="重做",
+            command=self._get_callback('redo'),
+            accelerator="Ctrl+Y"
+        )
+        
+        edit_menu.add_separator()
         
         edit_menu.add_command(
             label="复制图形",
@@ -530,8 +560,18 @@ class MenuBar:
         )
         
         draw_menu.add_command(
+            label="喷枪",
+            command=lambda: self._get_callback('set_tool')('spray')
+        )
+        
+        draw_menu.add_command(
             label="彩虹画笔",
             command=lambda: self._get_callback('set_tool')('rainbow')
+        )
+        
+        draw_menu.add_command(
+            label="文字工具",
+            command=lambda: self._get_callback('set_tool')('text')
         )
     
     def _create_curve_menu(self, menubar):
@@ -790,6 +830,18 @@ class DialogHelper:
                     command=lambda v=var, f=frame: DialogHelper._choose_color_in_dialog(v, f)
                 )
                 btn.pack(side='left')
+                param_vars[param['name']] = var
+
+            elif param['type'] == 'choice':
+                var = tk.StringVar(value=param['default'])
+                for value, text in param['choices']:
+                    rb = tk.Radiobutton(
+                        frame,
+                        text=text,
+                        variable=var,
+                        value=value
+                    )
+                    rb.pack(side='left', padx=5)
                 param_vars[param['name']] = var
         
         # 确认按钮
